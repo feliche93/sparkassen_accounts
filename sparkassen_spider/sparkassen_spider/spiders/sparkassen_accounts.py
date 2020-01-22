@@ -8,60 +8,69 @@ import scrapy
 from scrapy.crawler import CrawlerProcess
 
 
-class SparkassenAccountsSpider(scrapy.Spider):
-    name = 'sparkassen_accounts'
+class SparkassenLinkTester(scrapy.Spider):
+    name = 'sparkassen_link_tester'
     df = pd.read_csv(
         '/Users/felixvemmer/Desktop/sparkassen_accounts/sparkassen_list/sparkassen_rangliste_cleaned.csv')
 
+    # Take a df column and extract domain from full urls
     allowed_domains = list(df['links'].str.split('/', expand=True)
                            [2].str.split('www.', expand=True)[1])
 
-    #start_urls = ['http://sparkasse.de/']
-
+    # Read in all urls and from sparkassen
     sparkassen_links = df['links'].to_list()
 
-    start_urls = []
+    start_urls = set()
 
+    # Iterates over every link and creates three possible url paths for each sparkasse
     for link in sparkassen_links:
-        base_link = link.replace('.html', '/privatkunden/')
-        first_pattern = base_link + '/girokonto.html?'
-        second_pattern = base_link + '/girokonto-uebersicht.html?'
-        third_pattern = base_link + '/girokonten-und-karten/girokonten.html?'
-        start_urls.append(first_pattern)
-        start_urls.append(second_pattern)
-        start_urls.append(third_pattern)
+        base_link = link.replace('.html', '')
+        patterns = set([
+            '/girokonto.html?',
+            '/girokonto-uebersicht.html?',
+            '/girokonten-und-karten/girokonten.html?',
+            '/konten-und-karten.html?',
+            '/neue-girowelt.html?',
+            '/girokonten.html?',
+            '/produkte/girokonto.html?',
+            '/konten-und-karten.html?',
+            '/girokonto1.html?',
+            '/produkte/konten.html?'
+            '/privatkunden/girokonto.html?',
+            '/privatkunden/girokonto-uebersicht.html?',
+            '/privatkunden/girokonten-und-karten/girokonten.html?',
+            '/privatkunden/konten-und-karten.html?',
+            '/privatkunden/neue-girowelt.html?',
+            '/privatkunden/girokonten.html?',
+            '/privatkunden/produkte/girokonto.html?',
+            '/privatkunden/konten-und-karten.html?',
+            '/privatkunden/girokonto1.html?',
+            '/privatkunden/produkte/konten.html?',
+            '/konten---karten/girokonto.html?',
+            '/privatkunden/girokonto.html?n=true&stref=hnav',
+            '/produktangebot/girokonto.html?'
+        ])
+
+        for pattern in patterns:
+            account_link_pattern = base_link + pattern
+            start_urls.add(account_link_pattern)
 
     def parse(self, response):
-        base_url = response.url.split('/de/home')[0]
+
+       #base_url = response.url.split('/de/home')[0]
+
         if response.status == 200:
-            accounts = response.xpath(
-                '//div[@class="cbox cbox-product cbox-small section"]')
-            for account in accounts:
 
-                account_name = account.xpath(
-                    './/span//text()').extract_first()
-                if account_name == None:
-                    account_name = account.xpath(
-                        './/h2//text()').extract_first()
-
-                try:
-                    account_link = base_url + \
-                        account.xpath('.//a/@href').extract_first()
-                except:
-                    print(response.url)
-                print(account_name, account_link)
-
-                yield scrapy.Request(account_link, callback=self.parse_account_details, meta={'account_name': account_name, 'account_link': account_link})
-
-    def parse_account_details(self, response):
-        table = response.xpath('//table')
-        print(table)
+            yield {
+                'verified_url': response.url
+            }
 
 
 process = CrawlerProcess(settings={
     'FEED_FORMAT': 'csv',
-    'FEED_URI': 'test.csv'
+    'FEED_URI': 'verified_links.csv'
 })
 
-process.crawl(SparkassenAccountsSpider)
+
+process.crawl(SparkassenLinkTester)
 process.start()
